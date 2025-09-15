@@ -1,0 +1,34 @@
+# IDE and OS files
+.idea/
+.vscode/
+.DS_Store
+
+# Gemini files
+GEMINI.md
+**/GEMINI.md
+
+# Data files
+data/
+cnn/results/
+linear_models.ipynb
+
+# Python specific
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.ipynb_checkpoints
+
+# Build artifacts
+build/
+dist/
+*.egg-info
+
+# Environment
+.env
+venv/
+env/
+
+# Temporary directories from project structure
+2.2/
+2.2.2/
