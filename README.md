@@ -9,6 +9,23 @@ This repository includes my two main approaches:
 -   `linear_models.ipynb`: A Jupyter notebook exploring baseline linear models, such as Ridge Regression. This serves as a starting point to understand the data and establish a performance baseline.
 -   `cnn/`: A more sophisticated approach using a 1D Convolutional Neural Network (CNN) implemented in PyTorch to capture temporal patterns in the time series data.
 
+## Quick Start
+
+1.  **Set up the environment:**
+
+    ```bash
+    conda env create -f env.yml
+    conda activate mitsui
+    ```
+
+2.  **Run hyperparameter tuning:**
+
+    ```bash
+    python cnn/tune_hyperparams.py
+    ```
+
+    The results of the hyperparameter tuning will be saved as a CSV file in the `cnn/results/` directory.
+
 ## Methodology
 
 ### Linear Models
