@@ -10,7 +10,6 @@ GEMINI.md
 # Data files
 data/
 cnn/results/
-linear_models.ipynb
 
 # Python specific
 __pycache__/
