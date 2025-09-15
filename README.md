@@ -11,18 +11,18 @@ This repository includes my two main approaches:
 
 ## Quick Start
 
-0.  **Download the data:**
+1.  **Download the data:**
 
-    Download the competition data from [this link](https://www.kaggle.com/competitions/mitsui-commodity-prediction-challenge/data) and place it in a directory named `data/` in the root of this project.
+    Register & download the competition data from [this link](https://www.kaggle.com/competitions/mitsui-commodity-prediction-challenge/data) and place it in a directory named `data/` in the root of this project.
 
-1.  **Set up the environment:**
+2.  **Set up the environment:**
 
     ```bash
     conda env create -f env.yml
     conda activate mitsui
     ```
 
-2.  **Run hyperparameter tuning:**
+3.  **Run hyperparameter tuning:**
 
     ```bash
     python cnn/tune_hyperparams.py
