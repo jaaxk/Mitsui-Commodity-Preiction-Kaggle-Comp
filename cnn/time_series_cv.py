@@ -28,6 +28,9 @@ def train(model, epochs, batch_size, X, y, criterion='sharpe', optimizer='adam',
     else:
         raise ValueError(f'Invalid optimizer: {optimizer}')
 
+    # Move model to device if not already there
+    model = model.to(device)
+    
     for epoch in range(epochs):
         model.train()
         for i in range(0, len(X), batch_size):
@@ -36,7 +39,7 @@ def train(model, epochs, batch_size, X, y, criterion='sharpe', optimizer='adam',
 
             optimizer.zero_grad()
            
-            preds = model(X_batch) 
+            preds = model(X_batch)
             loss = criterion(preds, y_batch.float())
             loss.backward()
             optimizer.step()
@@ -95,9 +98,9 @@ def score(solution: pd.DataFrame, submission: pd.DataFrame, row_id_column_name: 
     
 
 
-def eval(model, X_test: torch.tensor, y_true, targets: pd.DataFrame, batch_size=64):
+def eval(model, X_test, y_test, targets: pd.DataFrame, batch_size=64):
     """evaluate model on MSE, MAE, R^2, and Kaggle eval metric:
-
+    
     "The competition's metric is a variant of the Sharpe ratio, computed 
     by dividing the mean Spearman rank correlation between the predictions 
     and targets by the standard deviation"
@@ -109,11 +112,17 @@ def eval(model, X_test: torch.tensor, y_true, targets: pd.DataFrame, batch_size=
         y_pred = []
         for i in range(0, len(X_test), batch_size):
             X_batch = X_test[i:i+batch_size]
-            y_pred.extend(model(X_batch).cpu().numpy())
+            # Move batch to the same device as model
+            if device is not None:
+                X_batch = X_batch.to(device)
+            y_pred_batch = model(X_batch)
+            y_pred.append(y_pred_batch.cpu().numpy())
 
+    # Convert to numpy arrays for sklearn metrics
     y_pred = np.vstack(y_pred)
-    y_true = y_true.cpu().numpy()
+    y_true = y_test.cpu().numpy() if torch.is_tensor(y_test) else y_test
 
+    # Calculate metrics
     mse = mean_squared_error(y_true, y_pred)
     mae = mean_absolute_error(y_true, y_pred)
     r2 = r2_score(y_true, y_pred)
@@ -161,6 +170,10 @@ def time_series_cv(model: nn.Module, feature_df: pd.DataFrame, target_df: pd.Dat
 
         X_train, y_train = get_X_y_overlap(feature_df[:split_point].drop(columns=['date_id']), target_df[:split_point].drop(columns=['date_id']), time_length)
         X_test, y_test = get_X_y_overlap(feature_df[split_point:].drop(columns=['date_id']), target_df[split_point:].drop(columns=['date_id']), time_length)
+        
+        # Move data to the specified device
+        X_train, y_train = X_train.to(device), y_train.to(device)
+        X_test, y_test = X_test.to(device), y_test.to(device)
 
         
         model = train(model, epochs, batch_size, X_train, y_train, lr=lr, criterion=criterion, optimizer=optimizer)

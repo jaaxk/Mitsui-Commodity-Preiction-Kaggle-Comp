@@ -16,6 +16,13 @@ import json
 from datetime import datetime
 from tqdm import tqdm
 from scipy.interpolate import PchipInterpolator
+import torch
+
+# Set device for PyTorch
+device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+print(f"Using device: {device}")
+if device.type == 'cuda':
+    print(f"GPU: {torch.cuda.get_device_name(0)}")
 
 def generate_hyperparameter_combinations(param_grid):
     """Generate all possible combinations of hyperparameters"""
@@ -88,7 +95,7 @@ def tune_hyperparameters(feature_df, target_df, param_grid, n_splits=3, epochs=1
         }
 
         
-        model = CNN(**model_params)
+        model = CNN(**model_params).to(device)
 
         if params.get('interpolation_method') == 'pchip':
             # Handle missing values with PCHIP interpolation
