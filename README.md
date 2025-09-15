@@ -11,6 +11,10 @@ This repository includes my two main approaches:
 
 ## Quick Start
 
+0.  **Download the data:**
+
+    Download the competition data from [this link](https://www.kaggle.com/competitions/mitsui-commodity-prediction-challenge/data) and place it in a directory named `data/` in the root of this project.
+
 1.  **Set up the environment:**
 
     ```bash
