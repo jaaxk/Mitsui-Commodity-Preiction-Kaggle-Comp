@@ -142,7 +142,7 @@ def get_X_y_overlap(feature_df: pd.DataFrame, target_df: pd.DataFrame, seq_lengt
     for i in range(len(feature_df)-seq_length):
         X.append(feature_df.iloc[i:i+seq_length].values)
         y.append(target_df.iloc[i+seq_length].values)
-    return torch.tensor(X), torch.tensor(y)
+    return torch.tensor(np.array(X)), torch.tensor(np.array(y))
     
 
 
