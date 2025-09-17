@@ -28,13 +28,6 @@ print(f"Using device: {device}")
 if device.type == 'cuda':
     print(f"GPU: {torch.cuda.get_device_name(0)}")
 
-def generate_hyperparameter_combinations(param_grid):
-    """Generate all possible combinations of hyperparameters"""
-    keys = param_grid.keys()
-    values = param_grid.values()
-    for combination in product(*values):
-        yield dict(zip(keys, combination))
-
 
 def pchip_interpolate(df):
     """
@@ -63,6 +56,87 @@ def pchip_interpolate(df):
     
     return result
 
+def objective(params, feature_df, target_df, n_splits=3, epochs=10):
+    """
+    Trains a CNN model with given hyperparameters and evaluates it using time series cross-validation.
+    Interpolates missing values in feature and target data using specified method.
+    Returns a dict with params and evaluation metrics: avg_sharpe_ratio, std_sharpe_ratio, avg_mse, avg_mae, avg_r2
+    """
+
+    model_params = {
+        'num_features': len(feature_df.columns)-1,
+        'time_length': params.get('time_length', 30),
+        'num_targets': len(target_df.columns)-1,
+        'conv_1_out': params.get('conv_1_out', 64),
+        'conv_2_out': params.get('conv_2_out', 128),
+        'conv_1_kernel_size': params.get('conv_1_kernel_size', 3),
+        'conv_2_kernel_size': params.get('conv_2_kernel_size', 3),
+        'pooling': params.get('pooling', 'max'),
+        'pool_1_kernel_size': params.get('pool_1_kernel_size', 2),
+        'pool_2_kernel_size': params.get('pool_2_kernel_size', 2),
+        'hidden_layer_size': params.get('hidden_layer_size', 256),
+        'dropout': params.get('dropout', 0.3)
+    }
+
+    
+    model = CNN(**model_params).to(device)
+
+    if params.get('interpolation_method') == 'pchip':
+        # Handle missing values with PCHIP interpolation
+        feature_df_interpolated = pchip_interpolate(feature_df)
+        target_df_interpolated = pchip_interpolate(target_df)
+
+
+    elif params.get('interpolation_method') == 'polynomial':
+        # Handle missing values with polynomial interpolation
+        interp_order = params.get('interpolation_order', 1)  # 1=linear, 2=quadratic, etc.
+        
+        # Apply polynomial interpolation with specified order
+        feature_df_interpolated = feature_df.interpolate(
+            method='polynomial', 
+            order=interp_order
+        )
+        target_df_interpolated = target_df.interpolate(
+            method='polynomial',
+            order=interp_order
+        )
+    else:
+        raise ValueError(f'Invalid interpolation method: {params.get("interpolation_method")}')
+    
+    # Handle any remaining NAs at the edges
+    feature_df_interpolated = feature_df_interpolated.ffill().bfill()
+    target_df_interpolated = target_df_interpolated.ffill().bfill()
+    
+
+
+    # Train and evaluate using time series CV
+    metrics = time_series_cv(
+        model=model,
+        feature_df=feature_df_interpolated,
+        target_df=target_df_interpolated,
+        n_splits=n_splits,
+        epochs=epochs,
+        batch_size=params.get('batch_size', 64),
+        lr=params.get('lr', 0.001),
+        criterion=params.get('criterion', 'MSE'),
+        optimizer=params.get('optimizer', 'adam')
+    )
+    
+    # Store results
+    result = {
+        **params,
+        'avg_sharpe_ratio': np.mean(metrics['sharpe_ratios']),
+        'std_sharpe_ratio': np.std(metrics['sharpe_ratios']),
+        'avg_mse': np.mean(metrics['mses']),
+        'avg_mae': np.mean(metrics['maes']),
+        'avg_r2': np.mean(metrics['r2s'])
+    }
+
+    return result
+    
+    
+    
+
 def tune_exhaustive(feature_df, target_df, param_grid, n_splits=3, epochs=10):
     """
     Perform exhaustive hyperparameter tuning using time series cross-validation.
@@ -78,88 +152,30 @@ def tune_exhaustive(feature_df, target_df, param_grid, n_splits=3, epochs=10):
         DataFrame with results for all hyperparameter combinations
     """
     results = []
+
+    def generate_hyperparameter_combinations(param_grid):
+        """Generate all possible combinations of hyperparameters"""
+        keys = param_grid.keys()
+        values = param_grid.values()
+        for combination in product(*values):
+            yield dict(zip(keys, combination))
+
+    #get total number of combinations:
+    total_combinations = len(list(generate_hyperparameter_combinations(param_grid)))
     
-    for params in tqdm(generate_hyperparameter_combinations(param_grid)):
+    for params in tqdm(generate_hyperparameter_combinations(param_grid), total=total_combinations):
         print(f"\nTraining with params: {params}")
         
-        # Initialize model with current hyperparameters
-        model_params = {
-            'num_features': len(feature_df.columns)-1,
-            'time_length': params.get('time_length', 30),
-            'num_targets': len(target_df.columns)-1,
-            'conv_1_out': params.get('conv_1_out', 64),
-            'conv_2_out': params.get('conv_2_out', 128),
-            'conv_1_kernel_size': params.get('conv_1_kernel_size', 3),
-            'conv_2_kernel_size': params.get('conv_2_kernel_size', 3),
-            'pooling': params.get('pooling', 'max'),
-            'pool_1_kernel_size': params.get('pool_1_kernel_size', 2),
-            'pool_2_kernel_size': params.get('pool_2_kernel_size', 2),
-            'hidden_layer_size': params.get('hidden_layer_size', 256),
-            'dropout': params.get('dropout', 0.3)
-        }
-
-        
-        model = CNN(**model_params).to(device)
-
-        if params.get('interpolation_method') == 'pchip':
-            # Handle missing values with PCHIP interpolation
-            feature_df_interpolated = pchip_interpolate(feature_df)
-            target_df_interpolated = pchip_interpolate(target_df)
-
-
-        elif params.get('interpolation_method') == 'polynomial':
-            # Handle missing values with polynomial interpolation
-            interp_order = params.get('interpolation_order', 1)  # 1=linear, 2=quadratic, etc.
-            
-            # Apply polynomial interpolation with specified order
-            feature_df_interpolated = feature_df.interpolate(
-                method='polynomial', 
-                order=interp_order
-            )
-            target_df_interpolated = target_df.interpolate(
-                method='polynomial',
-                order=interp_order
-            )
-        else:
-            raise ValueError(f'Invalid interpolation method: {params.get("interpolation_method")}')
-        
-        # Handle any remaining NAs at the edges
-        feature_df_interpolated = feature_df_interpolated.ffill().bfill()
-        target_df_interpolated = target_df_interpolated.ffill().bfill()
-        
-
-
-        # Train and evaluate using time series CV
-        metrics = time_series_cv(
-            model=model,
-            feature_df=feature_df_interpolated,
-            target_df=target_df_interpolated,
-            n_splits=n_splits,
-            epochs=epochs,
-            batch_size=params.get('batch_size', 64),
-            lr=params.get('lr', 0.001),
-            criterion=params.get('criterion', 'MSE'),
-            optimizer=params.get('optimizer', 'adam')
-        )
-        
-        # Store results
-        result = {
-            **params,
-            'avg_sharpe_ratio': np.mean(metrics['sharpe_ratios']),
-            'std_sharpe_ratio': np.std(metrics['sharpe_ratios']),
-            'avg_mse': np.mean(metrics['mses']),
-            'avg_mae': np.mean(metrics['maes']),
-            'avg_r2': np.mean(metrics['r2s'])
-        }
-        
+        result = objective(params, feature_df, target_df, n_splits=n_splits, epochs=epochs)
         results.append(result)
-        
+    
         # Save intermediate results
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         results_df = pd.DataFrame(results)
         results_df.to_csv(f'results/hyperparam_results_{timestamp}.csv', index=False)
-    
+
     return pd.DataFrame(results)
+                
 
 def tune_randomized(feature_df, target_df, param_grid, n_iter=100, n_splits=3, epochs=10):
     """
@@ -208,67 +224,7 @@ def tune_randomized(feature_df, target_df, param_grid, n_iter=100, n_splits=3, e
     for params in tqdm(param_combinations, total=n_iter):
         print(f"\nTraining with params: {params}")
         
-        # Initialize model with current hyperparameters
-        model_params = {
-            'num_features': len(feature_df.columns)-1,
-            'time_length': params.get('time_length', 30),
-            'num_targets': len(target_df.columns)-1,
-            'conv_1_out': params.get('conv_1_out', 64),
-            'conv_2_out': params.get('conv_2_out', 128),
-            'conv_1_kernel_size': params.get('conv_1_kernel_size', 3),
-            'conv_2_kernel_size': params.get('conv_2_kernel_size', 3),
-            'pooling': params.get('pooling', 'max'),
-            'pool_1_kernel_size': params.get('pool_1_kernel_size', 2),
-            'pool_2_kernel_size': params.get('pool_2_kernel_size', 2),
-            'hidden_layer_size': params.get('hidden_layer_size', 256),
-            'dropout': params.get('dropout', 0.3)
-        }
-        
-        model = CNN(**model_params).to(device)
-
-        if params.get('interpolation_method') == 'pchip':
-            feature_df_interpolated = pchip_interpolate(feature_df)
-            target_df_interpolated = pchip_interpolate(target_df)
-        elif params.get('interpolation_method') == 'polynomial':
-            interp_order = params.get('interpolation_order', 1)
-            feature_df_interpolated = feature_df.interpolate(
-                method='polynomial', 
-                order=interp_order
-            )
-            target_df_interpolated = target_df.interpolate(
-                method='polynomial',
-                order=interp_order
-            )
-        else:
-            raise ValueError(f'Invalid interpolation method: {params.get("interpolation_method")}')
-        
-        # Handle any remaining NAs at the edges
-        feature_df_interpolated = feature_df_interpolated.ffill().bfill()
-        target_df_interpolated = target_df_interpolated.ffill().bfill()
-
-        # Train and evaluate using time series CV
-        metrics = time_series_cv(
-            model=model,
-            feature_df=feature_df_interpolated,
-            target_df=target_df_interpolated,
-            n_splits=n_splits,
-            epochs=epochs,
-            batch_size=params.get('batch_size', 64),
-            lr=params.get('lr', 0.001),
-            criterion=params.get('criterion', 'MSE'),
-            optimizer=params.get('optimizer', 'adam')
-        )
-        
-        # Store results
-        result = {
-            **params,
-            'avg_sharpe_ratio': np.mean(metrics['sharpe_ratios']),
-            'std_sharpe_ratio': np.std(metrics['sharpe_ratios']),
-            'avg_mse': np.mean(metrics['mses']),
-            'avg_mae': np.mean(metrics['maes']),
-            'avg_r2': np.mean(metrics['r2s'])
-        }
-        
+        result = objective(params, feature_df, target_df, n_splits=n_splits, epochs=epochs)
         results.append(result)
         
         # Save intermediate results
@@ -278,10 +234,41 @@ def tune_randomized(feature_df, target_df, param_grid, n_iter=100, n_splits=3, e
     
     return pd.DataFrame(results)
 
+
+def tune_bayesian(param_grid, feature_df, target_df, n_splits=3, epochs=10):
+    """Tunes hyperparameters using Bayesian Optimization with Optuna library
+    """
+    import optuna
+
+    def objective_optuna(trial):
+        params = {}
+        for k, v in param_grid.items():
+            if isinstance(v[0], int):
+                # For integers, use the first value as min and second as max
+                params[k] = trial.suggest_int(k, min(v), max(v))
+            elif isinstance(v[0], float):
+                # For floats, use the first value as min and second as max
+                params[k] = trial.suggest_float(k, min(v), max(v))
+            elif isinstance(v[0], str):
+                # For strings, pass the list directly
+                params[k] = trial.suggest_categorical(k, v)
+            else:
+                raise TypeError(f'Unsupported hyperparameter type: {type(v[0])}')
+
+        print(f"\nTraining with params: {params}")
+        result = objective(params, feature_df, target_df, n_splits=n_splits, epochs=epochs)
+        return result['avg_sharpe_ratio'] #maximize sharpe ratio
+
+
+    study = optuna.create_study(direction='maximize')
+    study.optimize(objective_optuna, n_trials=100)
+
+    return study.best_params
+
 def main():
     # Parse command line arguments
     parser = argparse.ArgumentParser(description='Hyperparameter tuning for CNN model')
-    parser.add_argument('--tune_method', type=str, choices=['exhaustive', 'randomized'], 
+    parser.add_argument('--tune_method', type=str, choices=['exhaustive', 'randomized', 'bayesian'], 
                        default='exhaustive',
                        help='Hyperparameter tuning method: exhaustive or randomized search')
     parser.add_argument('--n_iter', type=int, default=100,
@@ -324,7 +311,7 @@ def main():
         )
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         results.to_csv(f'results/final_exhaustive_hyperparam_results_{timestamp}.csv', index=False)
-    else:  # randomized
+    elif args.tune_method == 'randomized':
         print(f"Running randomized hyperparameter search with {args.n_iter} iterations...")
         results = tune_randomized(
             feature_df=feature_df,
@@ -336,6 +323,19 @@ def main():
         )
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         results.to_csv(f'results/final_random_hyperparam_results_{timestamp}.csv', index=False)
+
+    elif args.tune_method == 'bayesian':
+        print(f"Running Bayesian hyperparameter search...")
+        results = tune_bayesian(
+            feature_df=feature_df,
+            target_df=target_df,
+            param_grid=param_grid,
+            n_splits=3,
+            epochs=10
+        )
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        results.to_csv(f'results/final_bayesian_hyperparam_results_{timestamp}.csv', index=False)
+
     
     # Print best parameters by Sharpe ratio
     best_idx = results['avg_sharpe_ratio'].idxmax()
