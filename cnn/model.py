@@ -8,7 +8,7 @@ class CNN(nn.Module):
         dropout=0.3):
         super().__init__()
         
-        self.conv1 = nn.Conv1d(in_channels=num_features, out_channels=conv_1_out, kernel_size=conv_1_kernel_size)
+        self.conv1 = nn.Conv1d(in_channels=num_features, out_channels=conv_1_out, kernel_size=conv_1_kernel_size, padding=conv_1_kernel_size//2) #padding so that we dont reduce time dimension (sequence length) at conv layers
 
         self.bn1 = nn.BatchNorm1d(conv_1_out)
 
@@ -21,7 +21,7 @@ class CNN(nn.Module):
         else:
             raise ValueError(f'Invalid pooling type: {pooling}')
 
-        self.conv2 = nn.Conv1d(in_channels=conv_1_out, out_channels=conv_2_out, kernel_size=conv_2_kernel_size)
+        self.conv2 = nn.Conv1d(in_channels=conv_1_out, out_channels=conv_2_out, kernel_size=conv_2_kernel_size, padding=conv_2_kernel_size//2)
 
         self.bn2 = nn.BatchNorm1d(conv_2_out)
 
@@ -36,17 +36,30 @@ class CNN(nn.Module):
 
 
         with torch.no_grad(): # get input size to fc1 after all layers
+            #prints to help visualize how layers change input size
             dummy = torch.zeros(1, num_features, time_length)
+            print(f'Input size: batch_size: {dummy.shape[0]}, channels: {dummy.shape[1]}, sequence_length: {dummy.shape[2]}')
             dummy_out = self.conv1(dummy)
+            print(f'Conv1 weight shape: {self.conv1.weight.shape}')
+            print(f'After conv1: batch_size: {dummy_out.shape[0]}, channels: {dummy_out.shape[1]}, sequence_length: {dummy_out.shape[2]}')
             dummy_out = self.bn1(dummy_out)
+            print(f'After bn1: batch_size: {dummy_out.shape[0]}, channels: {dummy_out.shape[1]}, sequence_length: {dummy_out.shape[2]}')
             dummy_out = self.relu(dummy_out)
+            print(f'After relu: batch_size: {dummy_out.shape[0]}, channels: {dummy_out.shape[1]}, sequence_length: {dummy_out.shape[2]}')
             dummy_out = self.pool_1(dummy_out)
+            print(f'After pool1: batch_size: {dummy_out.shape[0]}, channels: {dummy_out.shape[1]}, sequence_length: {dummy_out.shape[2]}')
 
             dummy_out = self.conv2(dummy_out)
+            print(f'Conv2 weight shape: {self.conv2.weight.shape}')
+            print(f'After conv2: batch_size: {dummy_out.shape[0]}, channels: {dummy_out.shape[1]}, sequence_length: {dummy_out.shape[2]}')
             dummy_out = self.bn2(dummy_out)
+            print(f'After bn2: batch_size: {dummy_out.shape[0]}, channels: {dummy_out.shape[1]}, sequence_length: {dummy_out.shape[2]}')
             dummy_out = self.relu(dummy_out) # Add this line
+            print(f'After relu2: batch_size: {dummy_out.shape[0]}, channels: {dummy_out.shape[1]}, sequence_length: {dummy_out.shape[2]}')
             dummy_out = self.pool_2(dummy_out)
+            print(f'After pool2: batch_size: {dummy_out.shape[0]}, channels: {dummy_out.shape[1]}, sequence_length: {dummy_out.shape[2]}')
             dummy_out = self.flatten(dummy_out)
+            print(f'After flatten: batch_size: {dummy_out.shape[0]}, features: {dummy_out.shape[1]}')
 
             flatten_size = dummy_out.view(1, -1).size(1)
 
