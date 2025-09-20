@@ -1,6 +1,7 @@
 # Mitsui & Co. Commodity Prediction Challenge
 
 This repository contains my submission for the [Mitsui & Co. Commodity Prediction Challenge](https://www.kaggle.com/competitions/mitsui-commodity-prediction-challenge/overview) on Kaggle. The goal of this competition is to predict the future prices of various commodities.
+My approach uses 1d CNNs with hyperparameters found using Bayesian Optimization and PCHIP interpolation of missing values.
 
 ## Project Structure
 
@@ -22,10 +23,10 @@ This repository includes my two main approaches:
     conda activate mitsui
     ```
 
-3.  **Run hyperparameter tuning:**
+3.  **Run hyperparameter tuning with Bayesian Optimization:**
 
     ```bash
-    python cnn/tune_hyperparams.py
+    python cnn/tune_hyperparams.py --tune_method bayesian
     ```
 
     The results of the hyperparameter tuning will be saved as a CSV file in the `cnn/results/` directory.
