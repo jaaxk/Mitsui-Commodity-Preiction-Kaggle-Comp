@@ -310,7 +310,7 @@ def main():
             epochs=10
         )
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        results.to_csv(f'results/final_exhaustive_hyperparam_results_{timestamp}.csv', index=False)
+      
     elif args.tune_method == 'randomized':
         print(f"Running randomized hyperparameter search with {args.n_iter} iterations...")
         results = tune_randomized(
@@ -322,7 +322,6 @@ def main():
             epochs=10
         )
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        results.to_csv(f'results/final_random_hyperparam_results_{timestamp}.csv', index=False)
 
     elif args.tune_method == 'bayesian':
         print(f"Running Bayesian hyperparameter search...")
@@ -334,7 +333,10 @@ def main():
             epochs=10
         )
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        results.to_csv(f'results/final_bayesian_hyperparam_results_{timestamp}.csv', index=False)
+
+    with open(f'results/best_params_{args.tune_method}_{timestamp}.json', 'w') as f:
+        json.dump(results, f)
+        
 
     
     # Print best parameters by Sharpe ratio

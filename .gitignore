@@ -31,3 +31,7 @@ env/
 # Temporary directories from project structure
 2.2/
 2.2.2/
+
+
+# Logs
+cnn/res.txt
